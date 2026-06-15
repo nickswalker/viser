@@ -124,6 +124,11 @@ function AxisHead({
       scale={hovered ? 0.7 : 0.55}
       onPointerDown={(e) => {
         e.stopPropagation();
+        // camera-controls listens for the native pointerdown on the same
+        // canvas; its startDragging() resets the camera target on every press,
+        // which would clobber the snap below. stopPropagation() only stops
+        // R3F's synthetic event, so stop the native one too.
+        (e.nativeEvent as PointerEvent).stopImmediatePropagation();
         onSelect(direction);
       }}
       onPointerOver={(e) => {
