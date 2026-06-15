@@ -6,6 +6,7 @@ type DevSettingsState = {
   fixedDpr: number | null;
   logCamera: boolean;
   enableOrbitCrosshair: boolean;
+  showViewportGizmo: boolean;
 };
 
 /** Create a dev settings store with initial values from URL search params for backward compatibility. */
@@ -18,12 +19,14 @@ export function useDevSettingsStore() {
     const fixedDprParam = searchParams.get("fixedDpr");
     const fixedDpr = fixedDprParam ? parseFloat(fixedDprParam) : null;
     const logCamera = searchParams.get("logCamera") !== null;
+    const showViewportGizmo = searchParams.get("showViewportGizmo") !== null;
 
     return createStore<DevSettingsState>({
       showStats,
       fixedDpr,
       logCamera,
       enableOrbitCrosshair: true,
+      showViewportGizmo,
     });
   })[0];
 }

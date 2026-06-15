@@ -18,6 +18,9 @@ export function DevSettingsPanel({ devSettingsStore }: DevSettingsPanelProps) {
   const enableOrbitCrosshair = devSettingsStore(
     (state) => state.enableOrbitCrosshair,
   );
+  const showViewportGizmo = devSettingsStore(
+    (state) => state.showViewportGizmo,
+  );
 
   const darkMode = viewer.useGui((state) => state.theme.dark_mode);
   const setDarkMode = (dark: boolean) => {
@@ -102,6 +105,29 @@ export function DevSettingsPanel({ devSettingsStore }: DevSettingsPanelProps) {
             onChange={(event) =>
               devSettingsStore.set({
                 enableOrbitCrosshair: event.currentTarget.checked,
+              })
+            }
+            size="xs"
+          />
+        </Tooltip>
+
+        <Tooltip
+          label={
+            <>
+              Show an orientation gizmo in the corner of
+              <br />
+              the viewport for snapping to axis-aligned views.
+            </>
+          }
+          refProp="rootRef"
+        >
+          <Switch
+            radius="xs"
+            label="Show Viewport Gizmo"
+            checked={showViewportGizmo}
+            onChange={(event) =>
+              devSettingsStore.set({
+                showViewportGizmo: event.currentTarget.checked,
               })
             }
             size="xs"

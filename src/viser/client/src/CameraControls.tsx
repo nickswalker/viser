@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { computeT_threeworld_world } from "./WorldTransformUtils";
 import { useThrottledMessageSender } from "./WebsocketUtils";
 import { isFormElement } from "./utils/isFormElement";
+import { ViewportGizmo } from "./ViewportGizmo";
 
 // Rotation from the three.js camera convention to the OpenCV one. Constant, so
 // it lives at module scope instead of being rebuilt every render.
@@ -429,6 +430,9 @@ export function SynchronizedCameraControls() {
   const searchParams = new URLSearchParams(window.location.search);
   const forceOrbitOriginTool = searchParams.get("forceOrbitOriginTool") === "1";
   const logCamera = viewer.useDevSettings((state) => state.logCamera);
+  const showViewportGizmo = viewer.useDevSettings(
+    (state) => state.showViewportGizmo,
+  );
 
   // Callback for sending cameras.
   // It makes the code more chaotic, but we preallocate a bunch of things to
@@ -685,6 +689,7 @@ export function SynchronizedCameraControls() {
         update={updatePivotControlFromCameraLookAtAndup}
         crosshairVisible={crosshairVisible}
       />
+      {showViewportGizmo && <ViewportGizmo />}
       <InitialCameraSetter />
     </>
   );
