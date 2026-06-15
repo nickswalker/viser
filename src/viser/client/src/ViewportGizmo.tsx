@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import React from "react";
-import { GizmoHelper, useGizmoContext, Line } from "@react-three/drei";
-import { ViewerContext } from "./ViewerContext";
+import { GizmoHelper, Line } from "@react-three/drei";
+import { ViewerContext, ViewerContextContents } from "./ViewerContext";
 import { shallowArrayEqual } from "./utils/shallowArrayEqual";
 
 // viser world-axis colors, matching the world-axes frame (see InstancedAxes in
@@ -11,8 +11,56 @@ const AXIS_LABELS: [string, string, string] = ["X", "Y", "Z"];
 
 // Pixel size of the gizmo content. The GizmoHelper renders into an orthographic
 // scene whose units are roughly pixels, so the axis arms end up ~GIZMO_SCALE
-// pixels long. Matches drei's GizmoViewport default.
-const GIZMO_SCALE = 40;
+// pixels long.
+const GIZMO_SCALE = 28;
+
+/** Snap the camera to look along `direction` (a unit vector in the three.js
+ * world frame pointing from the orbit target toward the new camera position).
+ *
+ * We drive the `camera-controls` instance directly rather than using drei's
+ * `GizmoHelper.tweenCamera`: that path is written for OrbitControls and leaves
+ * `camera.up` tilted after animating with camera-controls (it only restores up
+ * for OrbitControls), which makes camera-controls orbit around a bad up vector
+ * afterwards -- the camera ends up off-axis and drifts further on each click.
+ *
+ * Going through `camera-controls` also means the move animates with the same
+ * damping as normal navigation and fires the change events that keep the server
+ * camera in sync. */
+function snapCameraToDirection(
+  viewer: ViewerContextContents,
+  direction: THREE.Vector3,
+) {
+  const cameraControl = viewer.mutable.current.cameraControl;
+  if (!cameraControl) return;
+
+  const target = cameraControl.getTarget(new THREE.Vector3());
+  const distance = cameraControl.distance;
+  const up = cameraControl.camera.up;
+
+  // If we're looking straight along the up axis, the azimuth is degenerate:
+  // setLookAt would keep whatever azimuth we had (e.g. the ~45deg initial
+  // view), leaving X/Y rotated. Snap the azimuth to the nearest 90deg via
+  // rotateTo so top/bottom views land axis-aligned. Keep the world up vector
+  // untouched so subsequent orbiting behaves normally.
+  if (Math.abs(direction.dot(up)) > 0.999) {
+    const polar = direction.dot(up) > 0 ? 0 : Math.PI;
+    const quarter = Math.PI / 2;
+    const azimuth = Math.round(cameraControl.azimuthAngle / quarter) * quarter;
+    cameraControl.rotateTo(azimuth, polar, true);
+    return;
+  }
+
+  const newPosition = target.clone().addScaledVector(direction, distance);
+  cameraControl.setLookAt(
+    newPosition.x,
+    newPosition.y,
+    newPosition.z,
+    target.x,
+    target.y,
+    target.z,
+    true,
+  );
+}
 
 /** Build a circular sprite texture for an axis head. Positive heads are filled
  * with the axis color and carry the axis letter; negative heads are drawn as a
@@ -55,11 +103,12 @@ function makeAxisTexture(color: string, label: string | null): THREE.Texture {
 function AxisHead({
   direction,
   texture,
+  onSelect,
 }: {
   direction: THREE.Vector3;
   texture: THREE.Texture;
+  onSelect: (direction: THREE.Vector3) => void;
 }) {
-  const { tweenCamera } = useGizmoContext();
   const [hovered, setHovered] = React.useState(false);
 
   React.useEffect(() => {
@@ -75,8 +124,7 @@ function AxisHead({
       scale={hovered ? 0.7 : 0.55}
       onPointerDown={(e) => {
         e.stopPropagation();
-        // tweenCamera copies the vector, so passing our own is safe.
-        tweenCamera(direction);
+        onSelect(direction);
       }}
       onPointerOver={(e) => {
         e.stopPropagation();
@@ -97,9 +145,10 @@ function AxisHead({
  * the root-node rotation from computeT_threeworld_world. We place each axis at
  * the three.js-world direction of the corresponding viser-world axis, so the
  * labels/colors match the scene's world axes (including signs and arbitrary
- * up-directions set via set_up_direction). Because GizmoHelper's tweenCamera
- * operates in the three.js-world frame, feeding it these same directions keeps
- * the click navigation consistent with what's drawn. */
+ * up-directions set via set_up_direction). These directions are in the
+ * three.js-world frame, so feeding them straight to snapCameraToDirection (which
+ * also works in that frame) keeps the click navigation consistent with what's
+ * drawn. */
 function GizmoContent() {
   const viewer = React.useContext(ViewerContext)!;
   // Root rotation, recomputed reactively (set_up_direction can change it).
@@ -144,6 +193,11 @@ function GizmoContent() {
     }));
   }, [worldRotation]);
 
+  const onSelect = React.useCallback(
+    (direction: THREE.Vector3) => snapCameraToDirection(viewer, direction),
+    [viewer],
+  );
+
   return (
     <group scale={GIZMO_SCALE}>
       {axes.map((axis, i) => (
@@ -153,10 +207,15 @@ function GizmoContent() {
             color={axis.color}
             lineWidth={2.5}
           />
-          <AxisHead direction={axis.direction} texture={textures.positive[i]} />
+          <AxisHead
+            direction={axis.direction}
+            texture={textures.positive[i]}
+            onSelect={onSelect}
+          />
           <AxisHead
             direction={axis.direction.clone().negate()}
             texture={textures.negative[i]}
+            onSelect={onSelect}
           />
         </React.Fragment>
       ))}
